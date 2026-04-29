@@ -1534,6 +1534,7 @@ typedef struct {
     UCHAR cli_LinkID;
     UINT cli_VapIndex;
     INT cli_RSSI;
+    UCHAR cli_LinkMACAddress[6];
 } wifi_mld_sta_link_info_t;
 
 typedef struct {
@@ -1541,6 +1542,7 @@ typedef struct {
     wifi_multi_link_modes_t cli_MLModeCapa;
     BOOL cli_TIDLinkMapNegotiation;
     wifi_mld_sta_link_info_t cli_LinkInfo[MAX_NUM_RADIOS];
+    UINT cli_staLinkCount;
 } wifi_mld_sta_info_t;
 
 /**
