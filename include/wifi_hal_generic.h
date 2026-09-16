@@ -20,6 +20,10 @@
 /**********************************************************************
     Notes:
 
+    What is new for 3.0.7
+
+      1. Added cli_capableNumSpatialStreams field to wifi_associated_dev3_t structure in wifi_hal_generic.h file.
+
     What is new for 3.0.6
 
       1. Added new security types wifi_security_key_type_saeext, wifi_security_key_type_sae_saeext
@@ -192,7 +196,7 @@ extern "C"{
 // Defines for HAL version 3.0.6
 #define WIFI_HAL_MAJOR_VERSION 3        /**< Wi-Fi HAL major version. */
 #define WIFI_HAL_MINOR_VERSION 0        /**< Wi-Fi HAL minor version. */
-#define WIFI_HAL_MAINTENANCE_VERSION 6  /**< Wi-Fi HAL maintenance version. */
+#define WIFI_HAL_MAINTENANCE_VERSION 7  /**< Wi-Fi HAL maintenance version. */
 
 #define WIFI_HAL_VERSION \
     (WIFI_HAL_MAJOR_VERSION * 1000 + WIFI_HAL_MINOR_VERSION * 10 + WIFI_HAL_MAINTENANCE_VERSION) /**< Wi-Fi HAL version. */
@@ -234,6 +238,21 @@ extern "C"{
  * @brief Default length of device information fields.
  */
 #define DEFAULT_DEVICE_FIELD_LEN 64
+
+/**
+ * @brief Constants denoting limits and sentinel values for MLO parameters.
+ */
+
+/* Guarded due to hostapd having same definition */
+#ifndef MAX_NUM_MLD_LINKS
+#define MAX_NUM_MLD_LINKS 15 /**< Maximal allowed number of links */
+#endif
+
+#define MIN_MLO_GROUP_SIZE 2 /**< Minimum number of members that constitute a fully functional MLD. */
+#define MLD_UNIT_COUNT 8 /**< Maximal allowed number of MLDs on the device. */
+#define UNDEFINED_MLD_ID 255 /**< Value to denote unassigned or missing MLD ID */
+#define UNDEFINED_MLD_LINK_ID 255 /**< Value to denote unassigned or missing MLD link ID */
+
 /**********************************************************************
                 STRUCTURE DEFINITIONS
 **********************************************************************/
@@ -314,7 +333,8 @@ typedef enum
     WIFI_80211_VARIANT_AC = 0x20, /**< 802.11ac. */
     WIFI_80211_VARIANT_AD = 0x40, /**< 802.11ad. */
     WIFI_80211_VARIANT_AX = 0x80, /**< 802.11ax. */
-    WIFI_80211_VARIANT_BE = 0x100 /**< 802.11be. */
+    WIFI_80211_VARIANT_BE = 0x100, /**< 802.11be. */
+    WIFI_80211_VARIANT_BN = 0x200 /**< 802.11bn. */
 } wifi_ieee80211Variant_t;
 
 /**
@@ -373,9 +393,11 @@ typedef struct
     wifi_bitrate_t basic_rates; /**< Basic rates. */
     wifi_bitrate_t supp_rates; /**< Supported rates. */
     unsigned int dtim_period; /**< DTIM period. */
-    unsigned int chan_utilization; /**< Channel utilization. */
+    unsigned int chan_utilization; /**< Channel utilization.  As per R6 spec, this is valid only if BSS load element is present */
     int noise; /**< Noise. */
     int snr;  /**< SNR.  */
+    BOOL bss_load_element_present; /**< BSS Load element. */
+    unsigned int station_cnt; /**< Station count. As per R6 spec, this is valid only if BSS load element is present */
 } __attribute__((packed)) wifi_bss_info_t;
 
 /**
@@ -820,26 +842,37 @@ typedef enum
  */
 #define MAXIFACENAMESIZE 64
 
-/**
- * @brief HT (802.11n) capability related sizes
- */
-#define HT_MCS_SET_LEN          16
+#define HT_MCS_SET_LEN          16  /**< Length in bytes of the HT (802.11n) MCS set field. */
+#define VHT_MCS_SET_LEN         8   /**< Length in bytes of the VHT (802.11ac) MCS set field. */
+#define HE_MAX_MAC_CAPAB_SIZE    6   /**< Maximum length in bytes of the HE (802.11ax) MAC capabilities field. */
+#define HE_MAX_PHY_CAPAB_SIZE    11  /**< Maximum length in bytes of the HE (802.11ax) PHY capabilities field. */
+#define HE_MAX_MCS_CAPAB_SIZE    12  /**< Maximum length in bytes of the HE (802.11ax) MCS and NSS set field. */
+#define HE_MAX_PPET_CAPAB_SIZE   25  /**< Maximum length in bytes of the HE (802.11ax) PPE thresholds field. */
+#define EHT_PHY_CAPAB_LEN        9   /**< Length in bytes of the EHT (802.11be) PHY capabilities field. */
+#define EHT_MCS_NSS_CAPAB_LEN    9   /**< Length in bytes of the EHT (802.11be) MCS and NSS capabilities field. */
+#define EHT_PPE_THRESH_CAPAB_LEN 62  /**< Maximum length in bytes of the EHT (802.11be) PPE thresholds field. */
+#ifndef MAX_CHANNELS_PER_OP_CLASS
+#define MAX_CHANNELS_PER_OP_CLASS 70  /**< Maximum channels per operating class. */
+#endif
+#define MAX_OP_CLASS_ENTRIES      60
 
 /**
- * @brief VHT (802.11ac) capability related sizes
+ * @brief Channel scan impact level. Expected impact on Fronthaul/Backhaul operations during a channel scan.
+ *
+ * Values are defined by the EasyMesh specification.  The field is 2 bits wide.
  */
-#define VHT_MCS_SET_LEN         8
+typedef enum {
+    WIFI_SCAN_IMPACT_NONE           = 0x00, /**< No impact on Fronthaul/Backhaul operations. */
+    WIFI_SCAN_IMPACT_REDUCED_STREAMS = 0x01, /**< Reduced number of spatial streams during scan. */
+    WIFI_SCAN_IMPACT_TIME_SLICING   = 0x02, /**< Time slicing impairment during scan. */
+    WIFI_SCAN_IMPACT_RADIO_UNAVAIL  = 0x03, /**< Radio unavailable for >= 2 seconds during scan. */
+} wifi_channel_scan_impact_t;
 
-/**
- * @brief Wi-Fi 6/7 capability length definitions.
- */
-#define HE_MAX_MAC_CAPAB_SIZE    6
-#define HE_MAX_PHY_CAPAB_SIZE    11
-#define HE_MAX_MCS_CAPAB_SIZE    12
-#define HE_MAX_PPET_CAPAB_SIZE   25
-#define EHT_PHY_CAPAB_LEN        9
-#define EHT_MCS_NSS_CAPAB_LEN    9
-#define EHT_PPE_THRESH_CAPAB_LEN 62
+typedef struct {
+    UCHAR  op_class;                              /**< Global operating class number as defined in IEEE 802.11-2020 Table E-4. */
+    UCHAR num_channels;                          /**< Number of valid channel entries in the channels array. */
+    UCHAR channels[MAX_CHANNELS_PER_OP_CLASS];   /**< List of channel numbers (or center-frequency indices for 80/160/320 MHz classes) for this operating class. */
+} __attribute__((packed)) op_class_ch_list_t;
 
 /**
  * @brief Wi-Fi radio capabilities.
@@ -884,6 +917,11 @@ typedef struct
     UCHAR eht_phy_cap[EHT_PHY_CAPAB_LEN]; /**< EHT PHY capabilities */
     UCHAR eht_mcs[EHT_MCS_NSS_CAPAB_LEN]; /**< EHT MCS set */
     UCHAR eht_ppet[EHT_PPE_THRESH_CAPAB_LEN]; /**< EHT PPE thresholds */
+    UINT min_scan_interval;    /**< Minimum scan interval in seconds. */
+    UINT num_op_class_entries; /**< Number of valid entries in op_class_ch_list[]. */
+    BOOL boot_only;    /**< True if the radio is capable only of on-boot scans; false if it can perform scans upon request. */
+    UCHAR scan_impact; /**< Expected impact on Fronthaul/Backhaul operations during a channel scan. Use wifi_channel_scan_impact_t values. */
+    op_class_ch_list_t op_class_ch_list[MAX_OP_CLASS_ENTRIES]; /**< Per-radio table of IEEE 802.11-2020 Table E-4 operating classes and their valid channels, pre-populated by the HAL so that upper layers can resolve operating class channel lists directly from capabilities without needing to call HAL functions, which are not accessible at that layer. */
 } __attribute__((packed)) wifi_radio_capabilities_t;
 
 /**
@@ -1264,6 +1302,9 @@ typedef struct _wifi_associated_dev3
     wifi_multi_link_modes_t cli_MLModeCapa; /* Bitmap of the the MLD operation modes supported by the client */
     BOOL cli_TIDLinkMapNegotiation; /* Indicates whether TID to Link MAP negotiation is supported by client */
     mac_address_t cli_MLDAddr; /* Indicates the MLD MAC address of the connected client, 00's for non-Wi-Fi 7 clients. */
+    BOOL cli_PowerSaveMode;  /* Indicates the station is in Power save mode or not. */
+    ULONG cli_sleepTime;  /* Indicates the station's sleep time. */
+    UINT cli_capableNumSpatialStreams; /**< The maximum number of spatial streams supported/capable by the client device in the session. */
 } wifi_associated_dev3_t;
 
 /** @} */  //END OF GROUP WIFI_HAL_TYPES

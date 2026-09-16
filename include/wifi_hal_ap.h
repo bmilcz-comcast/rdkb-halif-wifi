@@ -438,6 +438,31 @@ typedef enum
 /**
  * @brief 802.1x frame.
  */
+
+typedef enum {
+    EAPOL_MSG_NONE = 0,
+    EAPOL_MSG_M1,
+    EAPOL_MSG_M2,
+    EAPOL_MSG_M3,
+    EAPOL_MSG_M4
+} eapol_msg_type_t;
+
+typedef enum {
+    EAPOL_FRAME_UNKNOWN = 0,
+    EAPOL_FRAME_ASSOC,
+    EAPOL_FRAME_REASSOC
+} eapol_frame_type_t;
+
+typedef enum {
+    M1_ASSOC = 0,
+    M1_REASSOC,
+    M2_ASSOC,
+    M2_REASSOC,
+    M3_ASSOC,
+    M3_REASSOC,
+    EAPOL_STATUS_TYPE_MAX
+} eapol_status_type_idx_t;
+
 typedef struct
 {
     unsigned char version; /**< Version. */
@@ -1534,6 +1559,7 @@ typedef struct {
     UCHAR cli_LinkID;
     UINT cli_VapIndex;
     INT cli_RSSI;
+    UCHAR cli_LinkAddress[6];
 } wifi_mld_sta_link_info_t;
 
 typedef struct {
@@ -1671,6 +1697,10 @@ typedef INT ( * wifi_device_disassociated_callback)(INT apIndex, char *src_mac,c
 typedef INT ( * wifi_stamode_callback)(int apIndex, char *mac, int key_mgmt, int type, int radio, int mode);
 
 typedef INT ( * wifi_handshake_callback)(int apIndex, char *mac, int status);
+
+typedef INT ( * wifi_eapol_key_callback)(int apIndex, char *mac, eapol_msg_type_t msg_type, unsigned long long replay_counter);
+
+typedef INT ( * wifi_eapol_timeouts_callback)(int apIndex, char *mac, int type);
 /* wifi_hal_ap_max_client_rejection_callback_register() function */
 /**
  * @brief This call back will be called whenever an authentication response with reject reason 17
@@ -1872,6 +1902,49 @@ typedef INT ( * wifi_device_deauthenticated_callback)(int ap_index, char *src_ma
  * @param callback_proc Pointer to the callback function to register.
  */
 void wifi_apDeAuthEvent_callback_register(wifi_apDeAuthEvent_callback callback_proc);
+/** @} */  //END OF GROUP WIFI_HAL_APIS
+
+/**
+ * @addtogroup WIFI_HAL_TYPES
+ * @{
+ */
+/* wifi_apFrameDropUnencrypted_callback() function */
+/**
+* @brief Callback invoked when the AP drops an unencrypted data frame received
+* from an associated STA on a security-enforced BSS (FC_WEP bit not set after
+* EAPOL has completed).  The STA has likely lost its PTK/GTK and the consumer
+* is expected to disassociate it so a fresh 4-way handshake takes place.
+*
+* @param[in] ap_index   Access Point Index
+* @param[in] src_mac    MAC address of the STA that sent the unprotected frame
+* @param[in] ether_type Ethertype of the dropped frame in host byte order
+*
+* @returns The status of the operation
+* @retval WIFI_HAL_SUCCESS If successful
+* @retval WIFI_HAL_ERROR   If any error is detected
+*
+* @note This function must not suspend and must not invoke any blocking system
+* calls.  It should send a message to a driver event handler task which is
+* responsible for performing the actual disassociation.
+*/
+typedef INT ( * wifi_apFrameDropUnencrypted_callback)(int ap_index, char *src_mac, unsigned short ether_type);
+
+/** @} */  //END OF GROUP WIFI_HAL_TYPES
+
+/**
+ * @addtogroup WIFI_HAL_APIS
+ * @{
+ */
+/**
+ * @brief Registers a callback function for unprotected-frame drop events.
+ *
+ * The callback is invoked when the driver reports that an unencrypted data
+ * frame was dropped on a secured AP BSS for an associated STA.  The consumer
+ * is expected to react by disassociating the offending STA.
+ *
+ * @param callback_proc Pointer to the callback function to register.
+ */
+void wifi_apFrameDropUnencrypted_callback_register(wifi_apFrameDropUnencrypted_callback callback_proc);
 
 /**
  * @brief Sets the interworking access network type for an Access Point.
@@ -3114,7 +3187,6 @@ typedef struct
     UINT mld_id;          /**< MLD group ID. */
     UINT mld_link_id;     /**< Link ID */
     mac_address_t mld_addr; /**< MLD group MAC address. */
-    BOOL mld_apply;       /**< MLD configuration apply indication */
 } __attribute__((packed)) wifi_mld_common_info_t;
 
 /**
@@ -3150,6 +3222,7 @@ typedef struct
     mac_address_t mac;        /**< MAC address. */
     wifi_mld_info_sta_t mld_info; /**< MLD information. */
     BOOL ignite_enabled; /* Ignite enable */
+    BOOL valid_bh_credentials; /**< TRUE if backhaul credentials (SSID and key) are valid. */
 } __attribute__((packed)) wifi_back_haul_sta_t;
 
 /**
@@ -3218,6 +3291,8 @@ typedef struct {
   UCHAR vendor_elements[WIFI_AP_MAX_VENDOR_IE_LEN]; /**< The vendor elements to be added to beacon/probe response frames. Includes IE ID (0xDD), Length, and Payload */
   USHORT vendor_elements_len;        /**< Length of vendor_elements currently stored since it is not null terminated */
   char interop_info[64];
+  CHAR multi_ap_backhaul_ssid[WIFI_AP_MAX_SSID_LEN]; /**< Multi-AP backhaul SSID. Populated with the mesh backhaul SSID when WPS onboarding is configured. */
+  UCHAR multi_ap_backhaul_network_key[256]; /**< Multi-AP backhaul network key, populated with the mesh backhaul key when WPS onboarding is configured. */
 } __attribute__((packed)) wifi_front_haul_bss_t;
 
 /**
